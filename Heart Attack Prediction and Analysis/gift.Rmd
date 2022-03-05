@@ -1,0 +1,570 @@
+---
+title: "Heart Attack Analysis & Prediction Using R"
+author: "by Gift Mtambo"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+![](image.jpg)
+
+<h3 style = "font-family: cursive;background-color:#ff99cc	">1.0.INTRODUCTION </h3>
+
+* A heart attack occurs when the flow of blood to the heart is blocked. The blockage is most often a buildup of fat, cholesterol and other substances, which form a plaque in the arteries that feed the heart (coronary arteries).
+* Sometimes, a plaque can rupture and form a clot that blocks blood flow.The interrupted blood flow can damage or destroy part of the heart muscle.
+
+<h3 style = "font-family: cursive;background-color:#ff99cc	">Objectives: </h3>
+* Analyse the datasets to determine which machine learning model is accurate.
+* Classify whether someone has less chances or more chances of heart attack
+* To determine which features are the most indicative of of heart attack
+      
+<h3 style = "font-family: cursive;background-color:#ff99cc	">Dataset Information: </h3>
+* The dataset can be downloaded using this [link](https://www.kaggle.com/rashikrahmanpritom/heart-attack-analysis-prediction-dataset).
+
+* The Dataset consist of 14 columns of which are both numerical and categorical variables and one of them is a Output variable-which consist of 1 or 0 indicating whether a person has  a more chance of heart attack(1) or less chance of heart attack(0).
+
+**The characteristics variables includes the following**
+
+* Age : Age of the patient
+* Sex : Sex of the patient
+* exng: exercise induced angina (1 = yes; 0 = no)
+* caa: number of major vessels (0-3)
+* cp : Chest Pain type
+  * Value 1: typical angina
+  * Value 2: atypical angina
+  * Value 3: non-anginal pain
+  * Value 4: asymptomatic
+* trtbps : resting blood pressure (in mm Hg)
+* chol : cholestoral in mg/dl fetched via BMI sensor
+* fbs : (fasting blood sugar > 120 mg/dl) (1 = true; 0 = false)
+* rest_ecg : resting electrocardiographic results
+  * Value 0: normal
+  * Value 1: having ST-T wave abnormality (T wave inversions and/or ST elevation     or depression of > 0.05 mV)
+  * Value 2: showing probable or definite left ventricular hypertrophy by Estes' 
+    criteria
+* thalach : maximum heart rate achieved
+* target : 0= less chance of heart attack 1= more chance of heart attack
+
+```{r include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+```
+
+
+<h3 style = "font-family: cursive;background-color:#ff99cc	">2.Loading and Checking the dataset: </h3>
+```{r message=FALSE, warning=FALSE}
+#Load the packages
+library(dplyr)  
+library(ggplot2)
+library(tidyr)
+library(psych)
+library(psychTools)
+library(tidyverse)
+library(hrbrthemes)
+library(randomForest)
+library(forcats)
+library(corrplot)
+library(GGally)
+library(viridis)
+library(corrr)
+library(DataExplorer)
+library(caret)
+library(caTools)
+library(e1071)
+library(class)
+library(pROC)
+```
+
+#### load the dataset
+```{r}
+# define the filename
+filename <- "heart.csv"
+# load the CSV file from the local directory
+dataset <- read.csv(filename,header=T,sep=",")
+```
+
+```{r,comment=NA}
+# column names of the dataset
+colnames(dataset)
+```
+
+```{r}
+#list types for each attribute
+sapply(dataset, class)
+```
+**observations** 
+
+- The dataset consists of 100% numerical variables(continuous columns),while no categorical variables(descrete variables).
+
+```{r}
+# display the data
+head(dataset,n=10)
+```
+
+<h3 style = "font-family: cursive;background-color:#ff99cc	">3.Data Cleaning And Analysis: </h3>
+
+#### feature Classification
+
+* Some features have wrong data type in the dataset, to better understand the data ,we need to transform the data types before the analysis.
+
+```{r}
+#classify the variables into categorical and numerical variables 
+#select the numerical variables
+numeric_var <-dataset %>% 
+  select("age","trtbps","chol","thalachh","oldpeak")
+#select the categorical values 
+categorical_var<- dataset %>%
+  select("sex","cp","fbs","restecg","exng","slp","caa",
+         "thall","output")%>%
+  mutate_if(is.numeric, as.factor)
+
+#combine the categorical  and numerical values
+dataset1 = cbind(categorical_var,numeric_var)
+```
+<h4 style = "font-family: cursive;background-color:#ff99cc	">Dimensions of the datasets: </h4>
+* Using the dataExplooer package provide an overview of dataset analysis.Based on missing values,discrete columns, and continuous columns
+ 
+ 
+## {.tabset}
+
+### BarPlot    
+```{r}
+plot_intro(dataset1,title="Dataset Information")
+```
+
+### Table
+```{r}
+introduce(dataset1)
+```
+
+## {-}
+
+**Observations**
+
+* Based on the table and Bar plot, the dataset indicates zero missing values and columns
+* The dataset has 303 instances and 14 attributes
+* Based on new dataset has 9 discrete column and 5 continuous columns(looks good now)
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">Descriptive Basic Statistics </h4>
+
+* Here we are going to analyse the statistical Summary of each attribute 
+```{r message=FALSE, warning=FALSE}
+describeBy(dataset1)
+```
+**Observations** 
+
+* Based on Skew values , it shows that the,dataset is highly skewed
+
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">Correlation Plot Analysis </h4>
+
+ 
+```{r fig.height=30, fig.width=40, message=FALSE, warning=FALSE}
+## plot correlations 
+correlation_tab <- cor(dataset) 
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+#png(file="corr2.png",res=150,width=900,height=700)                        
+corrplot(correlation_tab, method = "color", shade.col = NA, tl.col = "black", tl.srt = 45,tl.cex =4,cl.cex=4,col = col(200), addCoef.col = "black", order = "AOE",number.cex = 3)
+```
+
+**Observations**
+
+Positive correlations are displayed in blue and negative correlations in red color. Color intensities are proportional to the correlation coefficients
+
+- fbs and chl are least correlated with output 
+- There is strong positive correlation of output with cp,thalachh,slp and negative correlation with exng,oldpeak,caa,thall and sex.
+- Age and Thalachh are negatively correlated 
+- exang and cp are also negatively correlated 
+- slp is correlated with oldpeak and thalachh
+
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">Output Distribution </h4>
+
+To see if the dataset is balanced or not
+
+- 0= less chance of heart attack,
+- 1= more chance of heart attack
+
+```{r,fig.height=4,fig.width=6}
+df_output <- dataset1 %>%
+  group_by(output) %>%
+  summarise(freq= n()) %>%
+  mutate(percentage= freq/sum(freq)*100)
+
+output_bar <- ggplot(dataset1, aes(x=output, fill=output)) +
+  geom_bar( ) +geom_text(stat='count',aes(label=..count..),vjust=-0.30)+
+  labs( x = 'Target', y = 'Number of observations')+scale_fill_discrete(labels=c('0-less chances', '1-High Chances'))+theme_bw()
+
+output_bar
+```
+**Observation** 
+
+- According to the dataset almost 54% of people have more chance of heart attack while 46% has a less chance of heart attack
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">Categorical feature Analysis </h4>
+
+- Analysis with respect to output distribution 
+
+```{r message=FALSE, warning=FALSE}
+#select the categorical variable 
+par(mfrow=c(2,2))
+categorical_var<- list("sex","cp","fbs","restecg","exng","slp","caa",
+        "thall")
+for(i in categorical_var){
+  plot<- ggplot(dataset1,aes_string(x=i,fill=dataset1$output))+geom_bar(position = position_dodge()) + scale_fill_discrete(name="output",labels=c('0-less chances', '1-High Chances'))
+  print(plot)
+}
+```
+
+**Observations**
+
+* Based on thall, the risk of heart attack is achieved in people with maximum heart rate(class 2).
+* In sex feature, class 1 have high chances of heart attack than class 0
+* The chances of getting heart attack is more in class 0 of sex feature.
+* Comparing to corrlation plot analysis,fbs feature, shows least correlation with the output.
+* In caa, people with class, are highly prone to heart attack than people with class 4,3,and 2
+* Based on cp feature it shows that, people with non-anginal pain have high chances of heart attack, than people with atypical and typical anginal pain. 
+* In exng,people with class 1 have high chances of heart attack risk, while people with class 0 are less prone to heart attack.
+* Slp feature shows class 0 with less correlation with output ,than class 1 and 2
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">Numerical feature analysis </h4>
+
+```{r fig.height=17, fig.width=22, warning=FALSE}
+## select the numerical features
+## plot a pairplot
+plt <- ggpairs(numeric_var,columns=1:5,ggplot2::aes(alpha=0.75,color=dataset1$output),legend=2,upper = list(continuous = wrap("points",alpha = 0.75,size=2.8)),
+              lower = list(continuous = wrap("points",alpha = 0.75,size=2.8)))+ theme(text=element_text(size=22))+scale_colour_discrete(name="output",labels=c('0-less chances', '1-High Chances'))
+plt 
+```
+
+
+
+<h3 style = "font-family:cursive;background-color:#ff99cc	">3.Handling Outliers: </h3>
+There are several methods on how  to detect outliers in a dataset such as using Box plots,Scatter plot,Z score etc.Therefore,i have used boxplot analysis on numerical variables to detect the outliers 
+
+<h4 style = "font-family:cursive;background-color:#ff99cc	"> Boxplot Analysis </h4>
+* A box plot is a graphical method to summarize a data set by visualizing the minimum value, 25th percentile, median, 75th percentile, the maximum value, and potential outliers(Denise C, 2015).
+
+![](boxplot.png)
+
+## {.tabset}
+
+### Boxplot
+
+```{r fig.height=8, fig.width=14}
+#define the data 
+#classify the numerical variables into feature and value columns
+data <- numeric_var %>% 
+  gather(key="feature", value="value") %>% 
+  mutate(feature = gsub("\\.", " ",feature)) 
+data %>%
+  mutate(text=fct_reorder(feature, value))%>%
+  ggplot(aes(x=feature, y=value, fill=feature))+
+     geom_boxplot(outlier.colour = "red",outlier.shape = 1.5)+   
+     scale_fill_viridis(discrete=TRUE)+theme(legend.position="false",
+     text=element_text(size=15)) +coord_flip()
+```
+
+### Table
+```{r}
+head(data)
+```
+
+## {-}
+
+**Observations**
+
+- In trtbps,thalachh and chol,features contains outliers unlike age which are indicated by small red circle ,These outliers might affect the analysis and prediction accuracy.
+
+<h4 style = "font-family:cursive;background-color:#ff99cc	">Remove the Outliers </h4>
+
+* Before we remove outliers, you must first decide on what you consider to be an outlier. There are several ways to do so: Using the interquartile range. 
+* The interquartile range (IQR) is the difference between the 75th percentile (Q3) and the 25th percentile (Q1) in a dataset. 
+
+```{r}
+# create a dataframe from numerical variables and exclude age
+df_outliers<-as.data.frame(dataset1 %>%
+                  select("trtbps","thalachh","chol","oldpeak"))
+```
+
+```{r}
+outliers <- function(x) { 
+ #IQR
+  Q1 <- quantile(x, probs=.25) 
+  Q3 <- quantile(x, probs=.75) 
+  iqr = Q3-Q1 
+ 
+ #Upper Range
+ upper_limit = Q3 + (iqr*1.5) 
+ #Lower Range Eliminating Outliers 
+ lower_limit = Q1 - (iqr*1.5) 
+ 
+ x > upper_limit | x < lower_limit 
+} 
+# remove the outliers
+remove_outliers <- function(df_outliers, cols = names(df_outliers)) { 
+  for (col in cols) { 
+    df_outliers<- df_outliers[!outliers(df_outliers[[col]]),] 
+  } 
+  df_outliers 
+}
+# we have removed the outliers from the selected features 
+# create new dataset without outliers
+dataset2<-remove_outliers(dataset1,c("trtbps","oldpeak" ,"thalachh", "chol"))
+```
+
+```{r}
+#check the dimesions of the new dataset
+dim(dataset2)
+```
+**Observation**
+
+* Compared to dataset1 the dimensions have decreased, which indicates that rows with outliers have been removed from the dataset1.
+
+##### Boxplot Without Outliers
+
+```{r fig.height=8, fig.width=14, warning=FALSE}
+#define the data 
+#classify the numerical variables into feature and value columns
+numeric_feature <- dataset2%>% 
+  select("trtbps","oldpeak" ,"thalachh", "chol","age")
+data <- numeric_feature %>% 
+  gather(key="feature", value="value") %>% 
+  mutate(feature = gsub("\\.", " ",feature))
+
+data %>%
+  mutate(text = fct_reorder(feature, value)) %>%
+  ggplot( aes(x=feature, y=value, fill=feature)) +
+  geom_boxplot(outlier.colour = "red",outlier.shape = 1.5) +
+  scale_fill_viridis(discrete=TRUE) +
+  theme(legend.position="false",text=element_text(size=15)
+  ) +
+  coord_flip()
+```
+
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">4.Feature Selection </h4>
+
+* According to Michail.T(2018),Feature (or variable) selection is the process of identifying the minimal set of features with the highest predictive performance on the target variable of interest.
+
+* There are several feature selection methods provided by the caret R package,and among are Searching for and removing redundant feature,Boruta,Ranking features by importance,RFE etc.
+       
+* In this dataset we are going to use automatic methods, using Recursive Feature Elimination(RFE).
+
+## {.tabset}
+
+### Predictors Results
+```{r}
+set.seed(100)
+#create the subsets for sizes
+subsets <- c(1:8,10,13)
+# define the control using random forest selection 
+ctrl <- rfeControl(functions = rfFuncs,
+                   method = "repeatedcv",
+                   repeats = 5,
+                   number = 10,
+                   verbose = FALSE)
+
+#run the RFE
+results <- rfe(x=dataset2[, c(1:8,10:14)], y=dataset2$output,
+                 sizes = subsets,
+                 rfeControl = ctrl)
+
+# Print the selected features
+print(predictors(results))
+```
+
+### Variable Importance
+```{r}
+set.seed(100)
+varimp_data <- data.frame(feature = row.names(varImp(results))[1:9],
+                          importance = varImp(results)[1:9, 1])
+
+ggplot(data = varimp_data, 
+       aes(x = reorder(feature, -importance), y = importance, fill = feature)) +
+  geom_bar(stat="identity") + labs(x = "Features", y = "Variable Importance") + 
+  geom_text(aes(label = round(importance, 2)), vjust=1.6, color="white", size=4) + 
+  theme_bw() + theme(legend.position = "none")
+```
+
+## {-}
+
+**Observations**
+
+* Based on the RFE analysis only 8  features are selected , while fbs, and restecg are regarded as least important and they can affect the prediction model accuracy results. 
+
+
+```{r}
+#drop the least columns from the dataset2
+set.seed(100)
+data1 <- dataset2 %>%
+  select( "sex","cp","caa","thall","exng","slp","age","oldpeak","thalachh","output")
+head(data1)
+```
+
+<h4 style = "font-family: cursive;background-color:#ff99cc"> 6.Split the Dataset  </h4>
+```{r}
+set.seed(100)
+split = sample.split(data1$output, SplitRatio = 0.80)
+train_set = subset(data1, split == TRUE)
+test_set = subset(data1, split == FALSE)
+```
+
+```{r}
+# Feature Scaling
+set.seed(100)
+train_set[c(7,8,9)]= scale(train_set[c(7,8,9)])
+test_set[c(7,8,9)] = scale(test_set[c(7,8,9)])
+head(test_set)
+```
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">7.Model Classification  </h4>
+
+#### Naive Bayes
+
+```{r}
+set.seed(100)
+classifier = naiveBayes(x = train_set[-10],y = train_set$output)
+y_pred = predict(classifier, newdata = test_set[-10])
+cm = confusionMatrix(test_set[, 10], y_pred)
+cm
+```
+```{r}
+set.seed(100)
+naive_acc <- cm$overall["Accuracy"]
+#plot confusion Matrix 
+test_set$pred <- y_pred
+ggplot(test_set, aes(output, pred, color = output)) +
+  geom_jitter(width = 0.2, height = 0.1, size=2) +
+  labs(title="Confusion Matrix",
+       y="Predicted",
+       x="Truth")
+```
+
+
+#### Support Vector Machine(SVM)
+
+```{r}
+set.seed(100)
+svm_model= svm(formula=output~.,
+             data=train_set,
+             type="C-classification",
+             kernal="linear")
+y_pred= predict(svm_model,newdata = test_set[-10])
+
+cm= confusionMatrix(test_set[, 10], y_pred)
+cm
+```
+```{r}
+set.seed(100)
+svm_acc <- cm$overall["Accuracy"]
+#plot confusion Matrix 
+test_set$pred <- y_pred
+ggplot(test_set, aes(output, pred, color = output)) +
+  geom_jitter(width = 0.2, height = 0.1, size=2) +
+  labs(title="Confusion Matrix",
+       y="Predicted",
+       x="Truth")
+```
+
+#### Random Forest Model
+```{r echo=TRUE}
+set.seed(100)
+#Initial model
+random_frst <- randomForest( output ~ .,
+                             data=train_set)
+
+y_pred <- predict(random_frst, test_set)
+
+#plot confusion matrix
+cm<-confusionMatrix(factor(y_pred),test_set$output)
+cm
+```
+
+
+
+```{r echo=TRUE}
+set.seed(100)
+random_acc <- cm$overall["Accuracy"]
+#plot confusion Matrix 
+test_set$pred <- y_pred
+ggplot(test_set, aes(output, pred, color = output)) +
+  geom_jitter(width = 0.2, height = 0.1, size=2) +
+  labs(title="Confusion Matrix",
+       y="Predicted",
+       x="Truth")
+```
+#### Logistic Regression 
+
+```{r warning=FALSE}
+#logistic regression model
+set.seed(100)
+logistic_reg = glm(formula = output ~ .,
+                 family = binomial,
+                 data = train_set)
+prob_pred= predict(logistic_reg,type='response',newdata = test_set[-10])
+y_pred = ifelse(prob_pred > 0.5, 1, 0)
+
+#confusion matrix
+cm = confusionMatrix(test_set[,10],factor(y_pred))
+cm
+```
+```{r}
+set.seed(100)
+glm_acc <- cm$overall["Accuracy"]
+#plot confusion Matrix 
+test_set$pred <- y_pred
+ggplot(test_set, aes(output, pred, color = output)) +
+  geom_jitter(width = 0.2, height = 0.1, size=2) +
+  labs(title="Confusion Matrix",
+       y="Predicted",
+       x="Truth")
+```
+
+
+#### K Nearest Neighbor
+
+```{r warning=FALSE}
+set.seed(100)
+#initial model
+y_pred<-knn(train=train_set[,1:10],test = test_set[,1:10],cl=train_set$output,k=5)
+
+#confusion matrix 
+cm=confusionMatrix(test_set$output,y_pred)
+cm
+```
+
+```{r}
+set.seed(100)
+Knn_acc <- cm$overall["Accuracy"]
+#plot confusion Matrix 
+test_set$pred <- y_pred
+ggplot(test_set, aes(output, pred, color = output)) +
+  geom_jitter(width = 0.2, height = 0.1, size=2) +
+  labs(title="Confusion Matrix",
+       y="Predicted",
+       x="Truth")
+```
+**Observations**
+
+
+<h4 style = "font-family: cursive;background-color:#ff99cc">8.Model Comparison  </h4>
+
+```{r}
+set.seed(100)
+# create a dataframe for models accuracy 
+model_names <- c("Naive Bayes", "Logistic Regression","SVM","Random Forest",'KNN')
+# extract accuracy for various models 
+acc<- c(naive_acc, glm_acc, svm_acc,random_acc,Knn_acc)
+df_acc <- data.frame(model_names, acc)
+df_acc$model_names <- factor(df_acc$model_names,levels = df_acc$model_names)
+
+ggplot( mapping = aes(x=df_acc$model_names)) +
+    geom_bar(aes(y = ..acc.., fill = df_acc$model_names),width = 0.9,show.legend = FALSE) + geom_text(aes( y = ..acc.., label = scales::percent(..acc..)),size=4, stat = "count", vjust = -1)+ ylim(0, 1)+labs(y = "Accuracy", x="")+
+    theme(text = element_text(size = 15))
+```
+
+
+
+
+
